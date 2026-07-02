@@ -1,0 +1,162 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: agentops_postgres_dev
+    environment:
+      POSTGRES_USER: agentops
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: agentops_nexus
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./apps/api/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agentops_dev
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: agentops_redis_dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agentops_dev
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: agentops_qdrant_dev
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_dev_data:/qdrant/storage
+    networks:
+      - agentops_dev
+
+  # FastAPI Backend
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.dev
+    container_name: agentops_api_dev
+    environment:
+      - DATABASE_URL=postgresql://agentops:password@postgres:5432/agentops_nexus
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - QDRANT_URL=http://qdrant:6333
+      - DEBUG=true
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - agentops_dev
+    restart: unless-stopped
+
+  # Celery Worker
+  celery_worker:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.dev
+    container_name: agentops_celery_dev
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      - DATABASE_URL=postgresql://agentops:password@postgres:5432/agentops_nexus
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - QDRANT_URL=http://qdrant:6333
+    volumes:
+      - ./apps/api:/app
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - agentops_dev
+
+  # Celery Beat Scheduler
+  celery_beat:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.dev
+    container_name: agentops_celery_beat_dev
+    command: celery -A app.celery_app beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://agentops:password@postgres:5432/agentops_nexus
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    volumes:
+      - ./apps/api:/app
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - agentops_dev
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: agentops_prometheus_dev
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_dev_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    networks:
+      - agentops_dev
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: agentops_grafana_dev
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_dev_data:/var/lib/grafana
+      - ./infra/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./infra/grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - agentops_dev
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+  qdrant_dev_data:
+  prometheus_dev_data:
+  grafana_dev_data:
+
+networks:
+  agentops_dev:
+    driver: bridge

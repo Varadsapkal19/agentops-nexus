@@ -1,0 +1,210 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agentops-nexus
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentops-config
+  namespace: agentops-nexus
+data:
+  APP_ENV: "production"
+  DATABASE_URL: "postgresql://agentops:password@postgres-service:5432/agentops_nexus"
+  REDIS_URL: "redis://redis-service:6379/0"
+  CELERY_BROKER_URL: "redis://redis-service:6379/1"
+  QDRANT_URL: "http://qdrant-service:6333"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  namespace: agentops-nexus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: "agentops"
+            - name: POSTGRES_PASSWORD
+              value: "password"
+            - name: POSTGRES_DB
+              value: "agentops_nexus"
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: postgres-storage
+      volumes:
+        - name: postgres-storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: agentops-nexus
+spec:
+  ports:
+    - port: 5432
+  selector:
+    app: postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+  namespace: agentops-nexus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: agentops-nexus
+spec:
+  ports:
+    - port: 6379
+  selector:
+    app: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qdrant-deployment
+  namespace: agentops-nexus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant
+  template:
+    metadata:
+      labels:
+        app: qdrant
+    spec:
+      containers:
+        - name: qdrant
+          image: qdrant/qdrant:latest
+          ports:
+            - containerPort: 6333
+            - containerPort: 6334
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant-service
+  namespace: agentops-nexus
+spec:
+  ports:
+    - port: 6333
+      name: http
+    - port: 6334
+      name: grpc
+  selector:
+    app: qdrant
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentops-api-deployment
+  namespace: agentops-nexus
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: agentops-api
+  template:
+    metadata:
+      labels:
+        app: agentops-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/agentopsnexus/api:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: agentops-config
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: "250m"
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentops-api-service
+  namespace: agentops-nexus
+spec:
+  ports:
+    - port: 8000
+  selector:
+    app: agentops-api
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentops-web-deployment
+  namespace: agentops-nexus
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: agentops-web
+  template:
+    metadata:
+      labels:
+        app: agentops-web
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/agentopsnexus/web:latest
+          ports:
+            - containerPort: 3000
+          resources:
+            limits:
+              cpu: "500m"
+              memory: 512Mi
+            requests:
+              cpu: "100m"
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentops-web-service
+  namespace: agentops-nexus
+spec:
+  ports:
+    - port: 3000
+  selector:
+    app: agentops-web

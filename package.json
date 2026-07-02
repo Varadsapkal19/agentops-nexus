@@ -1,0 +1,30 @@
+{
+  "name": "agentops-nexus",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AgentOps Nexus - Enterprise AI Governance Platform",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up",
+    "docker:prod": "docker-compose -f docker-compose.prod.yml up -d",
+    "db:migrate": "cd apps/api && alembic upgrade head",
+    "db:reset": "cd apps/api && alembic downgrade base && alembic upgrade head"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "prettier": "^3.2.5",
+    "eslint": "^8.57.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

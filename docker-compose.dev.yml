@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # PostgreSQL Database
   postgres:
@@ -13,9 +11,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
-      - ./apps/api/db/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agentops"]
+      test: ["CMD-SHELL", "pg_isready -U agentops -d agentops_nexus"]
       interval: 10s
       timeout: 5s
       retries: 5

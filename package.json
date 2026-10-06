@@ -3,12 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "description": "AgentOps Nexus - Enterprise AI Governance Platform",
-  "packageManager": "npm@10.8.2",
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "lint": "turbo run lint",
+    "dev": "npm run dev --prefix apps/web",
+    "build": "npm run build --prefix apps/web",
+    "start": "npm run start --prefix apps/web",
+    "lint": "npm run lint --prefix apps/web",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "docker:dev": "docker compose -f docker-compose.dev.yml up --build",
     "docker:prod": "docker compose -f docker-compose.prod.yml up -d --build",
@@ -16,7 +15,6 @@
     "db:reset": "cd apps/api && alembic downgrade base && alembic upgrade head"
   },
   "devDependencies": {
-    "turbo": "^2.0.0",
     "prettier": "^3.2.5",
     "eslint": "^8.57.0"
   },
@@ -25,7 +23,6 @@
     "npm": ">=10.0.0"
   },
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "apps/*"
   ]
 }
